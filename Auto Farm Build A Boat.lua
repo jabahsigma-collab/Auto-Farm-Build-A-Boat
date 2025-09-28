@@ -2,7 +2,7 @@ getgenv().SecureMode = true
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "Build a Boat",
+   Name = "Build a Boat - By JABA",
    Icon = 0,
    LoadingTitle = "Auto Farm",
    LoadingSubtitle = "by JABA",
@@ -14,7 +14,7 @@ local Window = Rayfield:CreateWindow({
    ConfigurationSaving = {
       Enabled = true,
       FolderName = nil,
-      FileName = "Big Hub"
+      FileName = "JABA Hub"
    },
    Discord = {
       Enabled = false,
