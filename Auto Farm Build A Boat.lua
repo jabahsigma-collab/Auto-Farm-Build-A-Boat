@@ -2,7 +2,7 @@ getgenv().SecureMode = true
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "Build a Boat Auto Farm - By JABA",
+   Name = "Build a Boat",
    Icon = 0,
    LoadingTitle = "Auto Farm",
    LoadingSubtitle = "by JABA",
@@ -40,7 +40,7 @@ local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- List of coordinates (updated final coordinate)
+-- List of coordinates
 local coordinates = {
    {X = -47.76, Y = 55.02, Z = 1258.08},
    {X = -52.27, Y = 53.22, Z = 2068.29},
@@ -53,11 +53,12 @@ local coordinates = {
    {X = -57.12, Y = 55.64, Z = 7369.10},
    {X = -55.99, Y = 70.30, Z = 8114.71},
    {X = -30.76, Y = -140.06, Z = 8931.41},
-   {X = -51.55, Y = -359.38, Z = 9495.63} -- Updated final coordinate
+   {X = -51.55, Y = -359.38, Z = 9495.63} -- Final coordinate
 }
 
 local isAutoFarmEnabled = false
 local isTeleporting = false
+local isNotificationEnabled = false
 local currentPlatform = nil
 local spinConnection = nil
 
@@ -104,6 +105,156 @@ local function createPlatform(position)
    part.CanCollide = true -- Collidable for player
    part.Parent = Workspace
    currentPlatform = part
+end
+
+-- Function to teleport to a coordinate
+local function teleportTo(coord, tweenDuration)
+   if isTeleporting or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+      return
+   end
+
+   isTeleporting = true
+   local humanoidRootPart = LocalPlayer.Character.HumanoidRootPart
+   local targetPosition = Vector3.new(coord.X, coord.Y, coord.Z)
+   
+   -- Create platform before teleporting
+   createPlatform(targetPosition)
+   
+   local tweenInfo = TweenInfo.new(
+      tweenDuration or 1.2, -- Faster default duration
+      Enum.EasingStyle.Linear, -- Smooth movement
+      Enum.EasingDirection.InOut,
+      0,
+      false,
+      0
+   )
+   
+   -- Anchor the HumanoidRootPart before teleporting
+   humanoidRootPart.Anchored = true
+   local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = CFrame.new(targetPosition)})
+   tween:Play()
+   tween.Completed:Wait() -- Wait for tween to complete
+   wait(0.1) -- Small wait to ensure platform loads
+   -- Unanchor after a brief delay to ensure stability
+   humanoidRootPart.Anchored = false
+   isTeleporting = false
+end
+
+-- Function to handle chaotic fast teleports for exactly 3 seconds
+local function chaoticTeleports()
+   local lastCoord = coordinates[#coordinates]
+   local basePosition = Vector3.new(lastCoord.X, lastCoord.Y, lastCoord.Z)
+   local chaoticOffsets = {
+      Vector3.new(20, 0, 0),   -- Right
+      Vector3.new(-20, 0, 0),  -- Left
+      Vector3.new(0, 0, -20),  -- Back
+      Vector3.new(0, 0, 20),   -- Forward
+      Vector3.new(15, 0, 15),  -- Diagonal
+      Vector3.new(-15, 0, -15),-- Diagonal
+      Vector3.new(15, 0, -15), -- Diagonal
+      Vector3.new(-15, 0, 15)  -- Diagonal
+   }
+   
+   local startTime = tick()
+   -- Trigger notification when reaching final coordinate
+   if isNotificationEnabled then
+      Rayfield:Notify({
+         Title = "Touched Case",
+         Content = "Case",
+         Duration = 6.5,
+         Image = 4483362458
+      })
+   end
+   while tick() - startTime < 3 and isAutoFarmEnabled do
+      local randomOffset = chaoticOffsets[math.random(1, #chaoticOffsets)]
+      local targetPos = basePosition + randomOffset
+      teleportTo({X = targetPos.X, Y = basePosition.Y, Z = targetPos.Z}, 0.15) -- Fast chaotic teleport
+      wait(0.1) -- Short delay for smoother chaotic movement
+   end
+end
+
+-- Function to handle teleport sequence (run once per life)
+local function startTeleportSequence()
+   spawn(function()
+      -- Run the sequence only if enabled
+      if not isAutoFarmEnabled then return end
+      
+      for i = 1, #coordinates do
+         if not isAutoFarmEnabled then
+            -- Remove platform and exit if toggle is off
+            if currentPlatform then
+               currentPlatform:Destroy()
+               currentPlatform = nil
+            end
+            return
+         end
+         teleportTo(coordinates[i], 1.2) -- Faster teleport
+         if i == 4 then
+            wait(1) -- Pause at 4th coordinate to stop briefly
+         else
+            wait(0.05) -- Delay between teleports
+         end
+      end
+      
+      if isAutoFarmEnabled then
+         -- Start spinning at the final coordinate
+         startSpinning(30)
+         -- Perform chaotic teleports for exactly 3 seconds
+         chaoticTeleports()
+         -- Then stop and wait for natural death (spinning continues until death)
+         while isAutoFarmEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health > 0 do
+            wait(0.5) -- Check every 0.5 seconds to avoid busy waiting
+         end
+         -- Remove platform after death
+         if currentPlatform then
+            currentPlatform:Destroy()
+            currentPlatform = nil
+         end
+      end
+   end)
+end
+
+-- Handle player respawn to restart sequence after death
+LocalPlayer.CharacterAdded:Connect(function()
+   if isAutoFarmEnabled then
+      wait(3) -- Wait for character to fully load and respawn properly
+      startTeleportSequence()
+   end
+end)
+
+-- Auto Farm Toggle
+local Toggle = Tab:CreateToggle({
+   Name = "Auto Farm",
+   CurrentValue = false,
+   Flag = "Toggle1",
+   Callback = function(Value)
+      isAutoFarmEnabled = Value
+      if Value then
+         -- Start the sequence immediately if character exists
+         if LocalPlayer.Character then
+            startTeleportSequence()
+         end
+      else
+         -- Remove platform when toggle is turned off
+         if currentPlatform then
+            currentPlatform:Destroy()
+            currentPlatform = nil
+         end
+         stopSpinning() -- Stop spinning if toggle off
+      end
+   end,
+})
+
+-- Notification Toggle
+local NotificationToggle = Tab:CreateToggle({
+   Name = "Case Notification",
+   CurrentValue = false,
+   Flag = "Toggle2",
+   Callback = function(Value)
+      isNotificationEnabled = Value
+   end,
+})
+```   currentPlatform = part
 end
 
 -- Function to teleport to a coordinate
