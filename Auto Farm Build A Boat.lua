@@ -2,7 +2,7 @@ getgenv().SecureMode = true
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "Build a Boat Auto Farm - By JABA",
+   Name = "Build a Boat",
    Icon = 0,
    LoadingTitle = "Auto Farm",
    LoadingSubtitle = "by JABA",
@@ -104,6 +104,132 @@ end
 local function teleportTo(coord, tweenDuration)
    if isTeleporting or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
       return
+   end
+
+   isTeleporting = true
+   local humanoidRootPart = LocalPlayer.Character.HumanoidRootPart
+   local targetPosition = Vector3.new(coord.X, coord.Y, coord.Z)
+   
+   createPlatform(targetPosition)
+   
+   local tweenInfo = TweenInfo.new(
+      tweenDuration or 1.2,
+      Enum.EasingStyle.Linear,
+      Enum.EasingDirection.InOut,
+      0,
+      false,
+      0
+   )
+   
+   humanoidRootPart.Anchored = true
+   local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = CFrame.new(targetPosition)})
+   tween:Play()
+   tween.Completed:Wait()
+   wait(0.1)
+   humanoidRootPart.Anchored = false
+   isTeleporting = false
+end
+
+local function chaoticTeleports()
+   local lastCoord = coordinates[#coordinates]
+   local basePosition = Vector3.new(lastCoord.X, lastCoord.Y, lastCoord.Z)
+   local chaoticOffsets = {
+      Vector3.new(20, 0, 0),
+      Vector3.new(-20, 0, 0),
+      Vector3.new(0, 0, -20),
+      Vector3.new(0, 0, 20),
+      Vector3.new(15, 0, 15),
+      Vector3.new(-15, 0, -15),
+      Vector3.new(15, 0, -15),
+      Vector3.new(-15, 0, 15)
+   }
+   
+   local startTime = tick()
+   if isNotificationEnabled then
+      Rayfield:Notify({
+         Title = "Touched Case",
+         Content = "Case",
+         Duration = 6.5,
+         Image = 4483362458
+      })
+   end
+   while tick() - startTime < 3 and isAutoFarmEnabled do
+      local randomOffset = chaoticOffsets[math.random(1, #chaoticOffsets)]
+      local targetPos = basePosition + randomOffset
+      teleportTo({X = targetPos.X, Y = basePosition.Y, Z = targetPos.Z}, 0.15)
+      wait(0.1)
+   end
+end
+
+local function startTeleportSequence()
+   spawn(function()
+      if not isAutoFarmEnabled then return end
+      
+      for i = 1, #coordinates do
+         if not isAutoFarmEnabled then
+            if currentPlatform then
+               currentPlatform:Destroy()
+               currentPlatform = nil
+            end
+            return
+         end
+         teleportTo(coordinates[i], 1.2)
+         if i == 4 then
+            wait(1)
+         else
+            wait(0.05)
+         end
+      end
+      
+      if isAutoFarmEnabled then
+         startSpinning(30)
+         chaoticTeleports()
+         while isAutoFarmEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health > 0 do
+            wait(0.5)
+         end
+         if currentPlatform then
+            currentPlatform:Destroy()
+            currentPlatform = nil
+         end
+      end
+   end)
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+   if isAutoFarmEnabled then
+      wait(3)
+      startTeleportSequence()
+   end
+end)
+
+local Toggle = Tab:CreateToggle({
+   Name = "Auto Farm",
+   CurrentValue = false,
+   Flag = "Toggle1",
+   Callback = function(Value)
+      isAutoFarmEnabled = Value
+      if Value then
+         if LocalPlayer.Character then
+            startTeleportSequence()
+         end
+      else
+         if currentPlatform then
+            currentPlatform:Destroy()
+            currentPlatform = nil
+         end
+         stopSpinning()
+      end
+   end,
+})
+
+local NotificationToggle = Tab:CreateToggle({
+   Name = "Case Notification",
+   CurrentValue = false,
+   Flag = "Toggle2",
+   Callback = function(Value)
+      isNotificationEnabled = Value
+   end,
+})      return
    end
 
    isTeleporting = true
