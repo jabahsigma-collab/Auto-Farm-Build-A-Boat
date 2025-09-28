@@ -37,14 +37,15 @@ local Tab = Window:CreateTab("Auto Farm", 4483362458)
 local TweenService = game:GetService("TweenService")
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- List of coordinates (4th coordinate Y lowered by 20 for better stopping)
+-- List of coordinates (updated final coordinate)
 local coordinates = {
    {X = -47.76, Y = 55.02, Z = 1258.08},
    {X = -52.27, Y = 53.22, Z = 2068.29},
    {X = -53.37, Y = 61.48, Z = 2824.95},
-   {X = -45.59, Y = 58.28, Z = 3620.83}, -- Lowered Y from 78.28 to 58.28
+   {X = -45.59, Y = 58.28, Z = 3620.83}, -- Lowered Y
    {X = -49.42, Y = 94.42, Z = 4382.18},
    {X = -49.77, Y = 85.24, Z = 5045.65},
    {X = -56.34, Y = 73.38, Z = 5798.88},
@@ -52,14 +53,42 @@ local coordinates = {
    {X = -57.12, Y = 55.64, Z = 7369.10},
    {X = -55.99, Y = 70.30, Z = 8114.71},
    {X = -30.76, Y = -140.06, Z = 8931.41},
-   {X = -53.88, Y = -352.51, Z = 9491.67}
+   {X = -51.55, Y = -359.38, Z = 9495.63} -- Updated final coordinate
 }
 
 local isAutoFarmEnabled = false
 local isTeleporting = false
 local currentPlatform = nil
+local spinConnection = nil
 
--- Function to create a platform part (lowered further for better stopping)
+-- Function to start spinning
+local function startSpinning(speed)
+   if spinConnection then
+      spinConnection:Disconnect()
+      spinConnection = nil
+   end
+   spinConnection = RunService.Heartbeat:Connect(function(deltaTime)
+      if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+         local hrp = LocalPlayer.Character.HumanoidRootPart
+         hrp.CFrame = hrp.CFrame * CFrame.Angles(0, math.rad(speed) * deltaTime, 0)
+      end
+   end)
+end
+
+-- Function to stop spinning
+local function stopSpinning()
+   if spinConnection then
+      spinConnection:Disconnect()
+      spinConnection = nil
+   end
+end
+
+-- Handle character removal to stop spinning on death
+LocalPlayer.CharacterRemoving:Connect(function()
+   stopSpinning()
+end)
+
+-- Function to create a platform part
 local function createPlatform(position)
    -- Remove previous platform if it exists
    if currentPlatform then
@@ -69,7 +98,7 @@ local function createPlatform(position)
    
    local part = Instance.new("Part")
    part.Size = Vector3.new(30, 0.5, 30) -- Larger platform for better stability
-   part.Position = position + Vector3.new(0, -3, 0) -- Lowered from -1 to -3
+   part.Position = position + Vector3.new(0, -3, 0) -- Platform 3 studs below
    part.Anchored = true
    part.Transparency = 0.5 -- Slightly visible for debugging, change to 1 for invisible
    part.CanCollide = true -- Collidable for player
@@ -91,7 +120,7 @@ local function teleportTo(coord, tweenDuration)
    createPlatform(targetPosition)
    
    local tweenInfo = TweenInfo.new(
-      tweenDuration or 1.2, -- Faster default duration (from 1.5 to 1.2)
+      tweenDuration or 1.2, -- Faster default duration
       Enum.EasingStyle.Linear, -- Smooth movement
       Enum.EasingDirection.InOut,
       0,
@@ -106,6 +135,104 @@ local function teleportTo(coord, tweenDuration)
    tween.Completed:Wait() -- Wait for tween to complete
    wait(0.1) -- Small wait to ensure platform loads
    -- Unanchor after a brief delay to ensure stability
+   humanoidRootPart.Anchored = false
+   isTeleporting = false
+end
+
+-- Function to handle chaotic fast teleports for exactly 3 seconds
+local function chaoticTeleports()
+   local lastCoord = coordinates[#coordinates]
+   local basePosition = Vector3.new(lastCoord.X, lastCoord.Y, lastCoord.Z)
+   local chaoticOffsets = {
+      Vector3.new(20, 0, 0),   -- Right
+      Vector3.new(-20, 0, 0),  -- Left
+      Vector3.new(0, 0, -20),  -- Back
+      Vector3.new(0, 0, 20),   -- Forward
+      Vector3.new(15, 0, 15),  -- Diagonal
+      Vector3.new(-15, 0, -15),-- Diagonal
+      Vector3.new(15, 0, -15), -- Diagonal
+      Vector3.new(-15, 0, 15)  -- Diagonal
+   }
+   
+   local startTime = tick()
+   while tick() - startTime < 3 and isAutoFarmEnabled do
+      local randomOffset = chaoticOffsets[math.random(1, #chaoticOffsets)]
+      local targetPos = basePosition + randomOffset
+      teleportTo({X = targetPos.X, Y = basePosition.Y, Z = targetPos.Z}, 0.15) -- Fast chaotic teleport
+      wait(0.1) -- Short delay for smoother chaotic movement
+   end
+end
+
+-- Function to handle teleport sequence (run once per life)
+local function startTeleportSequence()
+   spawn(function()
+      -- Run the sequence only if enabled
+      if not isAutoFarmEnabled then return end
+      
+      for i = 1, #coordinates do
+         if not isAutoFarmEnabled then
+            -- Remove platform and exit if toggle is off
+            if currentPlatform then
+               currentPlatform:Destroy()
+               currentPlatform = nil
+            end
+            return
+         end
+         teleportTo(coordinates[i], 1.2) -- Faster teleport
+         if i == 4 then
+            wait(1) -- Pause at 4th coordinate to stop briefly
+         else
+            wait(0.05) -- Delay between teleports
+         end
+      end
+      
+      if isAutoFarmEnabled then
+         -- Start spinning at the final coordinate
+         startSpinning(30)
+         -- Perform chaotic teleports for exactly 3 seconds
+         chaoticTeleports()
+         -- Then stop and wait for natural death (spinning continues until death)
+         while isAutoFarmEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health > 0 do
+            wait(0.5) -- Check every 0.5 seconds to avoid busy waiting
+         end
+         -- Remove platform after death
+         if currentPlatform then
+            currentPlatform:Destroy()
+            currentPlatform = nil
+         end
+      end
+   end)
+end
+
+-- Handle player respawn to restart sequence after death
+LocalPlayer.CharacterAdded:Connect(function()
+   if isAutoFarmEnabled then
+      wait(3) -- Wait for character to fully load and respawn properly
+      startTeleportSequence()
+   end
+end)
+
+local Toggle = Tab:CreateToggle({
+   Name = "Auto Farm",
+   CurrentValue = false,
+   Flag = "Toggle1",
+   Callback = function(Value)
+      isAutoFarmEnabled = Value
+      if Value then
+         -- Start the sequence immediately if character exists
+         if LocalPlayer.Character then
+            startTeleportSequence()
+         end
+      else
+         -- Remove platform when toggle is turned off
+         if currentPlatform then
+            currentPlatform:Destroy()
+            currentPlatform = nil
+         end
+         stopSpinning() -- Stop spinning if toggle off
+      end
+   end,
+})   -- Unanchor after a brief delay to ensure stability
    humanoidRootPart.Anchored = false
    isTeleporting = false
 end
