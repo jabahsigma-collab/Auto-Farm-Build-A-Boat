@@ -1,0 +1,199 @@
+getgenv().SecureMode = true
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Build a Boat",
+   Icon = 0,
+   LoadingTitle = "Auto Farm",
+   LoadingSubtitle = "by JABA",
+   ShowText = "Rayfield",
+   Theme = "Default",
+   ToggleUIKeybind = "K",
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false,
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil,
+      FileName = "Big Hub"
+   },
+   Discord = {
+      Enabled = false,
+      Invite = "noinvitelink",
+      RememberJoins = true
+   },
+   KeySystem = true,
+   KeySettings = {
+      Title = "key",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided",
+      FileName = "Key",
+      SaveKey = true,
+      GrabKeyFromSite = false,
+      Key = {"JABA"}
+   }
+})
+
+local Tab = Window:CreateTab("Auto Farm", 4483362458)
+local TweenService = game:GetService("TweenService")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local LocalPlayer = Players.LocalPlayer
+
+-- List of coordinates
+local coordinates = {
+   {X = -47.76, Y = 55.02, Z = 1258.08},
+   {X = -52.27, Y = 53.22, Z = 2068.29},
+   {X = -53.37, Y = 61.48, Z = 2824.95},
+   {X = -45.59, Y = 78.28, Z = 3620.83},
+   {X = -49.42, Y = 94.42, Z = 4382.18},
+   {X = -49.77, Y = 85.24, Z = 5045.65},
+   {X = -56.34, Y = 73.38, Z = 5798.88},
+   {X = -63.25, Y = 56.97, Z = 6656.30},
+   {X = -57.12, Y = 55.64, Z = 7369.10},
+   {X = -55.99, Y = 70.30, Z = 8114.71},
+   {X = -30.76, Y = -140.06, Z = 8931.41},
+   {X = -53.88, Y = -352.51, Z = 9491.67}
+}
+
+local isAutoFarmEnabled = false
+local isTeleporting = false
+local currentPlatform = nil
+
+-- Function to create a platform part
+local function createPlatform(position)
+   -- Remove previous platform if it exists
+   if currentPlatform then
+      currentPlatform:Destroy()
+      currentPlatform = nil
+   end
+   
+   local part = Instance.new("Part")
+   part.Size = Vector3.new(30, 0.5, 30) -- Larger platform for better stability
+   part.Position = position + Vector3.new(0, -1, 0) -- Slightly below the player
+   part.Anchored = true
+   part.Transparency = 0.5 -- Slightly visible for debugging, change to 1 for invisible
+   part.CanCollide = true -- Collidable for player
+   part.Parent = Workspace
+   currentPlatform = part
+end
+
+-- Function to teleport to a coordinate
+local function teleportTo(coord, tweenDuration)
+   if isTeleporting or not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+      return
+   end
+
+   isTeleporting = true
+   local humanoidRootPart = LocalPlayer.Character.HumanoidRootPart
+   local targetPosition = Vector3.new(coord.X, coord.Y, coord.Z)
+   
+   -- Create platform before teleporting
+   createPlatform(targetPosition)
+   
+   local tweenInfo = TweenInfo.new(
+      tweenDuration or 1.2, -- Faster default duration (from 1.5 to 1.2)
+      Enum.EasingStyle.Linear, -- Smooth movement
+      Enum.EasingDirection.InOut,
+      0,
+      false,
+      0
+   )
+   
+   -- Anchor the HumanoidRootPart before teleporting
+   humanoidRootPart.Anchored = true
+   local tween = TweenService:Create(humanoidRootPart, tweenInfo, {CFrame = CFrame.new(targetPosition)})
+   tween:Play()
+   tween.Completed:Wait() -- Wait for tween to complete
+   wait(0.1) -- Small wait to ensure platform loads
+   -- Unanchor after a brief delay to ensure stability
+   humanoidRootPart.Anchored = false
+   isTeleporting = false
+end
+
+-- Function to handle chaotic fast teleports for exactly 2 seconds
+local function chaoticTeleports()
+   local lastCoord = coordinates[#coordinates]
+   local basePosition = Vector3.new(lastCoord.X, lastCoord.Y, lastCoord.Z)
+   local chaoticOffsets = {
+      Vector3.new(20, 0, 0),   -- Right
+      Vector3.new(-20, 0, 0),  -- Left
+      Vector3.new(0, 0, -20),  -- Back
+      Vector3.new(0, 0, 20),   -- Forward
+      Vector3.new(15, 0, 15),  -- Diagonal
+      Vector3.new(-15, 0, -15),-- Diagonal
+      Vector3.new(15, 0, -15), -- Diagonal
+      Vector3.new(-15, 0, 15)  -- Diagonal
+   }
+   
+   local startTime = tick()
+   while tick() - startTime < 2 and isAutoFarmEnabled do
+      local randomOffset = chaoticOffsets[math.random(1, #chaoticOffsets)]
+      local targetPos = basePosition + randomOffset
+      teleportTo({X = targetPos.X, Y = basePosition.Y, Z = targetPos.Z}, 0.15) -- Faster chaotic teleport (from 0.2 to 0.15)
+      wait(0.1) -- Short delay for smoother chaotic movement
+   end
+end
+
+-- Function to handle teleport sequence (run once per life)
+local function startTeleportSequence()
+   spawn(function()
+      -- Run the sequence only if enabled
+      if not isAutoFarmEnabled then return end
+      
+      for i = 1, #coordinates do
+         if not isAutoFarmEnabled then
+            -- Remove platform and exit if toggle is off
+            if currentPlatform then
+               currentPlatform:Destroy()
+               currentPlatform = nil
+            end
+            return
+         end
+         teleportTo(coordinates[i], 1.2) -- Faster teleport
+         wait(0.2) -- Slightly longer delay between teleports for stability
+      end
+      
+      if isAutoFarmEnabled then
+         -- Perform chaotic teleports for exactly 2 seconds
+         chaoticTeleports()
+         -- Then stop and wait for natural death
+         while isAutoFarmEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") and LocalPlayer.Character.Humanoid.Health > 0 do
+            wait(0.5) -- Check every 0.5 seconds to avoid busy waiting
+         end
+         -- Remove platform after death
+         if currentPlatform then
+            currentPlatform:Destroy()
+            currentPlatform = nil
+         end
+      end
+   end)
+end
+
+-- Handle player respawn to restart sequence after death
+LocalPlayer.CharacterAdded:Connect(function()
+   if isAutoFarmEnabled then
+      wait(3) -- Increased wait for character to fully load and respawn properly
+      startTeleportSequence()
+   end
+end)
+
+local Toggle = Tab:CreateToggle({
+   Name = "Auto Farm",
+   CurrentValue = false,
+   Flag = "Toggle1",
+   Callback = function(Value)
+      isAutoFarmEnabled = Value
+      if Value then
+         -- Start the sequence immediately if character exists
+         if LocalPlayer.Character then
+            startTeleportSequence()
+         end
+      else
+         -- Remove platform when toggle is turned off
+         if currentPlatform then
+            currentPlatform:Destroy()
+            currentPlatform = nil
+         end
+      end
+   end,
+})
